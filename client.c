@@ -14,7 +14,7 @@ void exibirInstrucoesDeUso(int argc, char **argv) {
     exit(EXIT_FAILURE);
 }
 
-#define BUFFERSIZE 512
+#define BUFFERSIZE 500
 
 int main(int argc, char **argv) {
 
@@ -40,26 +40,38 @@ int main(int argc, char **argv) {
     printf("connected to %s\n", addrstr);
 
     char buff[BUFFERSIZE];
-    memset(buff, 0, BUFFERSIZE);
-    printf("mensagem> ");
-    fgets(buff, BUFFERSIZE-1, stdin);
-    int numBytes = send(socket_, buff, strlen(buff) + 1, 0);
+    while(1){
+	printf("> ");
+	memset(buff, 0, BUFFERSIZE);
+	size_t numBytes;
+	while(buff[strlen(buff)-1] != '\n'){
+	    memset(buff, 0, BUFFERSIZE);
+	    fgets(buff, BUFFERSIZE-1, stdin);
+	    numBytes = send(socket_, buff, strlen(buff), 0);
+	    if (numBytes != strlen(buff)) {
+	        exibirLogSaida("send");
+   	    }
+	}
 
-    if(numBytes != strlen(buff) + 1)
-        exibirLogSaida("send");
-
-    memset(buff, 0, BUFFERSIZE);
-    unsigned totalBytes = 0;
-    while(1) {
-        numBytes = recv(socket_, buff + totalBytes, BUFFERSIZE - totalBytes, 0);
-        if(numBytes == 0)
-            break; // Finaliza a conexão
-        totalBytes += numBytes;
+	if(strcmp(buff, "kill\n") == 0){
+	    close(socket_);
+	    exit(EXIT_SUCCESS);
+	}
+	memset(buff, 0, BUFFERSIZE);
+	unsigned totalBytes = 0;
+	while(buff[strlen(buff)-1] != '\n') {
+	    numBytes = recv(socket_, buff + totalBytes, BUFFERSIZE - totalBytes, 0);
+	    if(numBytes == 0) {
+	        break; // Fecha a conexão
+	    }
+	    totalBytes += numBytes;
+	}
+	printf("< %s", buff);
     }
     close(socket_);
 
-    printf("received %u bytes\n", totalBytes);
-    puts(buff);
+    //printf("received %u bytes\n", totalBytes);
+    //puts(buff);
 
     exit(EXIT_SUCCESS);
 }
