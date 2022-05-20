@@ -70,8 +70,5 @@ int main(int argc, char **argv) {
     }
     close(socket_);
 
-    //printf("received %u bytes\n", totalBytes);
-    //puts(buff);
-
     exit(EXIT_SUCCESS);
 }

@@ -28,7 +28,7 @@ int parsearEndereco(const char *addrstr, const char *portstr, struct sockaddr_st
         return 0;
     }
 
-    struct in_addr inaddr6; // Endereço IP de 128 bits
+    struct in6_addr inaddr6; // Endereço IP de 128 bits
     if(inet_pton(AF_INET6, addrstr, &inaddr6)) {
         struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *) storage;
         addr6->sin6_family = AF_INET6;

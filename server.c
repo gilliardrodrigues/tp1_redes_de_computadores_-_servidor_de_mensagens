@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#define BUFSZ 512
+#define BUFSZ 500
 #define MAX_SENSORES_POR_VEZ 3
 
 bool sistema[4][4] = { false };
@@ -17,9 +17,10 @@ int qtdSensoresDisponiveis = 15;
 
 
 int validaId(char *strId) {
-    if(strlen(strId) < 2)
+    if(strlen(strId) != 2)
         return -1;
     int id = atoi(strId);
+    printf("ID QUE CHEGOU NO VALIDADOR: %d\n", id);
     if(id < 1 || id > 4)
         return -1;
     return 0;
@@ -30,36 +31,69 @@ void instalarSensor(char *instrucao, int socketCliente) {
     memset(msg, 0, 500);
     int sensores[MAX_SENSORES_POR_VEZ];
     char *entrada = strtok(instrucao, " ");
-    entrada = strtok(NULL, " "); //Pra pular o 'sensor'
+    entrada = strtok(instrucao, " ");
     int numSensores = 0;
-    while(strcmp(entrada, "in") != 0) {
-        if(validaId(entrada) == -1)
+    bool atingiuMaxSensores = false;
+    bool entradaInvalida = false;
+    while(strcmp(entrada, "in") != 0 && !entradaInvalida) { //Para de iterar após o último sensor
+        if(validaId(entrada) == -1){
+            entradaInvalida = true;
             strcat(msg, "invalid sensor ");
+        }
         else {
             sensores[numSensores] = atoi(entrada);
-            entrada = strtok(NULL, " ");
             numSensores++;
         }
+        entrada = strtok(NULL, " ");
     }
     entrada = strtok(NULL, " ");
-    if(validaId(entrada) == -1)
-        strcat(msg, "invalid equipment ");
-    else {
-        int equipamentoId = atoi(entrada);
-        strcat(msg, "sensor");
-        char idStr[4];
-        for(int i = 0; i < numSensores; i++){ 
-            sistema[equipamentoId-1][sensores[i]-1] = true;
-            sprintf(idStr, " 0%d", sensores[i]);
-            strcat(msg, idStr);
+    char msgSensorDuplicado[100];
+    memset(msgSensorDuplicado, 0, 100);
+    if(!entradaInvalida){
+        if(validaId(entrada) == -1)
+            strcat(msg, "invalid equipment ");
+        else {
+            int equipamentoId = atoi(entrada);
+            strcat(msg, "sensor");
+            char idStr[4];
+            bool fezAlteracao = false;
+            for(int i = 0; i < numSensores; i++){
+                if(!sistema[equipamentoId-1][sensores[i]-1]){
+                    if(qtdSensoresDisponiveis > 0){
+                        sistema[equipamentoId-1][sensores[i]-1] = true;
+                        sprintf(idStr, " 0%d", sensores[i]);
+                        strcat(msg, idStr);
+                        qtdSensoresDisponiveis -= 1;
+                        fezAlteracao = true;
+                    }
+                    else {
+                        atingiuMaxSensores = true;
+                        memset(msg, 0, 500);
+                        strcpy(msg, "limit exceeded ");
+                        break;
+                    }
+                }
+                else {
+                    sprintf(idStr, "0%d ", sensores[i]);
+                    strcat(msgSensorDuplicado, idStr);
+                    strcat(msgSensorDuplicado, "already exists in ");
+                    sprintf(idStr, "0%d ", equipamentoId);
+                    strcat(msgSensorDuplicado, idStr);
+                }
+            }
+            if(!atingiuMaxSensores && (strcmp(msgSensorDuplicado, "") != 0 && fezAlteracao))
+                strcat(msg, " added ");
+            else if(!atingiuMaxSensores && fezAlteracao)
+                strcat(msg, " added ");
+            else
+                strcat(msg, " ");
+            strcat(msg, msgSensorDuplicado);
         }
-        strcat(msg, " added ");
     }
     msg[strlen(msg)-1] = '\n';
     int numBytes = send(socketCliente, msg, strlen(msg), 0);
     if(numBytes != strlen(msg))
         exibirLogSaida("send");
-    qtdSensoresDisponiveis -= numSensores;
 }
 
 void consultarEquipamento(char *instrucao, int socketCliente) {
@@ -90,7 +124,6 @@ void consultarEquipamento(char *instrucao, int socketCliente) {
 
 int avaliarComando(char *comando, int socketCliente) {
     char *instrucao = strtok(comando, " ");
-    //printf("1: INSTRUCAO = %s\n", instrucao);
     while(instrucao != NULL) {
         if(strcmp(instrucao, "add") == 0) {
             instalarSensor(NULL, socketCliente);
@@ -183,7 +216,8 @@ int main(int argc, char **argv) {
                 }
                 totalBytes += numBytes;
             }
-            if(auxRetorno == -1) break;
+            if(auxRetorno == -1)
+                break;
             printf("%s", buf);
             linhas = strtok(buf, "\n");
             if(strcmp(buf, "kill") == 0){
@@ -194,8 +228,11 @@ int main(int argc, char **argv) {
 
             while(linhas != NULL){
 		auxRetorno = avaliarComando(buf, csock);
-		if(auxRetorno == -1)
-                    break;
+		if(auxRetorno == -1){
+                    close(csock);
+                    exit(EXIT_SUCCESS);
+                    return 0;
+                }
                 linhas = strtok(NULL, "\n");
             }
 	    if(auxRetorno == -1)
@@ -206,3 +243,4 @@ int main(int argc, char **argv) {
 
     exit(EXIT_SUCCESS);
 }
+
