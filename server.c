@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <sys/socket.h>
@@ -20,7 +21,6 @@ int validaId(char *strId) {
     if(strlen(strId) != 2)
         return -1;
     int id = atoi(strId);
-    printf("ID QUE CHEGOU NO VALIDADOR: %d\n", id);
     if(id < 1 || id > 4)
         return -1;
     return 0;
@@ -76,10 +76,12 @@ void instalarSensor(char *instrucao, int socketCliente) {
                 else {
                     sprintf(idStr, "0%d ", sensores[i]);
                     strcat(msgSensorDuplicado, idStr);
-                    strcat(msgSensorDuplicado, "already exists in ");
-                    sprintf(idStr, "0%d ", equipamentoId);
-                    strcat(msgSensorDuplicado, idStr);
                 }
+            }
+            if(strcmp(msgSensorDuplicado, "") != 0) {
+                strcat(msgSensorDuplicado, "already exists in ");
+                sprintf(idStr, "0%d ", equipamentoId);
+                strcat(msgSensorDuplicado, idStr);
             }
             if(!atingiuMaxSensores && (strcmp(msgSensorDuplicado, "") != 0 && fezAlteracao))
                 strcat(msg, " added ");
@@ -163,17 +165,81 @@ void removerSensor(char *instrucao, int socketCliente) {
                 else {
                     sprintf(idStr, "0%d ", sensores[i]);
                     strcat(msgSensorNaoExiste, idStr);
-                    strcat(msgSensorNaoExiste, "does not exist in ");
-                    strcat(msgSensorNaoExiste, idStr);
                 }
             }
-            if(strcmp(msgSensorNaoExiste, " ") != 0 && fezExclusao)
+            if(strcmp(msgSensorNaoExiste, "") != 0) {
+                strcat(msgSensorNaoExiste, "does not exist in ");
+                sprintf(idStr, "0%d ", equipamentoId);
+                strcat(msgSensorNaoExiste, idStr);
+            }
+            if(strcmp(msgSensorNaoExiste, "") != 0 && fezExclusao)
                 strcat(msg, " removed ");
             else if(fezExclusao)
                 strcat(msg, " removed ");
             else
                 strcat(msg, " ");
             strcat(msg, msgSensorNaoExiste);
+        }
+    }
+    msg[strlen(msg)-1] = '\n';
+    int numBytes = send(socketCliente, msg, strlen(msg), 0);
+    if(numBytes != strlen(msg))
+        exibirLogSaida("send");
+}
+
+double gerarLeituraSensor() {
+    return (double)(rand() % 1001)/100;
+}
+
+void consultarVariavelDeProcesso(char *instrucao, int socketCliente) {
+    char msg[500];
+    memset(msg, 0, 500);
+    int sensores[MAX_SENSORES_POR_VEZ];
+    char *entrada = strtok(instrucao, " ");
+    int numSensores = 0;
+    bool entradaInvalida = false;
+    while(strcmp(entrada, "in") != 0 && !entradaInvalida) {
+        if(validaId(entrada) == -1) {
+            entradaInvalida = true;
+            strcat(msg, "invalid sensor");
+        }
+        else {
+            sensores[numSensores] = atoi(entrada);
+            numSensores++;
+        }
+        entrada = strtok(NULL, " ");
+    }
+    entrada = strtok(NULL, " ");
+    char msgSensorNaoInstalado[100];
+    memset(msgSensorNaoInstalado, 0, 100);
+    if(!entradaInvalida){
+        if(validaId(entrada) == -1)
+            strcat(msg, "invalid equipment ");
+        else {
+            int equipamentoId = atoi(entrada);
+            char idStr[4];
+            bool fezAlgumaLeitura = false;
+            char leituraStr[6];
+            for(int i = 0; i < numSensores; i++) {
+                if(sistema[equipamentoId-1][sensores[i]-1]) {
+                    sprintf(leituraStr, "%.2f ", gerarLeituraSensor());
+                    strcat(msg, leituraStr);
+                    fezAlgumaLeitura = true;
+                }
+                else {
+                    sprintf(idStr, "0%d ", sensores[i]);
+                    strcat(msgSensorNaoInstalado, idStr);
+                }
+            }
+            if(fezAlgumaLeitura && strcmp(msgSensorNaoInstalado, "") != 0) {
+                strcat(msg, "and ");
+                strcat(msg, msgSensorNaoInstalado);
+                strcat(msg, "not installed ");
+            }
+            else if(strcmp(msgSensorNaoInstalado, "") != 0) {
+                 strcpy(msg, msgSensorNaoInstalado);
+                 strcat(msg, "not installed ");
+            }
         }
     }
     msg[strlen(msg)-1] = '\n';
@@ -195,7 +261,7 @@ int avaliarComando(char *comando, int socketCliente) {
             consultarEquipamento(NULL, socketCliente);
         }
         else if(strcmp(instrucao, "read") == 0) {
-            //consultarVariavelProcesso();
+            consultarVariavelDeProcesso(NULL, socketCliente);
         }
         else {
             close(socketCliente);
@@ -213,6 +279,7 @@ void exibirInstrucoesDeUso(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+    srand((unsigned) time(NULL));
     if (argc < 3) {
         exibirInstrucoesDeUso(argc, argv);
     }
