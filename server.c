@@ -122,6 +122,66 @@ void consultarEquipamento(char *instrucao, int socketCliente) {
         exibirLogSaida("send");
 }
 
+void removerSensor(char *instrucao, int socketCliente) {
+    char msg[500];
+    memset(msg, 0, 500);
+    int sensores[MAX_SENSORES_POR_VEZ];
+    char *entrada = strtok(instrucao, " ");
+    entrada = strtok(instrucao, " ");
+    int numSensores = 0;
+    bool entradaInvalida = false;
+    while(strcmp(entrada, "in") != 0 && !entradaInvalida) {
+        if(validaId(entrada) == -1) {
+            entradaInvalida = true;
+            strcat(msg, "invalid sensor ");
+        }
+        else {
+            sensores[numSensores] = atoi(entrada);
+            numSensores++;
+        }
+        entrada = strtok(NULL, " ");
+    }
+    entrada = strtok(NULL, " ");
+    char msgSensorNaoExiste[100];
+    memset(msgSensorNaoExiste, 0, 100);
+    if(!entradaInvalida) {
+        if(validaId(entrada) == -1)
+            strcat(msg, "invalid equipment ");
+        else {
+            int equipamentoId = atoi(entrada);
+            strcat(msg, "sensor");
+            char idStr[4];
+            bool fezExclusao = false;
+            for(int i = 0; i < numSensores; i++) {
+                if(sistema[equipamentoId-1][sensores[i]-1]) {
+                    sistema[equipamentoId-1][sensores[i]-1] = false;
+                    sprintf(idStr, " 0%d", sensores[i]);
+                    strcat(msg, idStr);
+                    qtdSensoresDisponiveis += 1;
+                    fezExclusao = true;
+                }
+                else {
+                    sprintf(idStr, "0%d ", sensores[i]);
+                    strcat(msgSensorNaoExiste, idStr);
+                    strcat(msgSensorNaoExiste, "does not exist in ");
+                    strcat(msgSensorNaoExiste, idStr);
+                }
+            }
+            if(strcmp(msgSensorNaoExiste, " ") != 0 && fezExclusao)
+                strcat(msg, " removed ");
+            else if(fezExclusao)
+                strcat(msg, " removed ");
+            else
+                strcat(msg, " ");
+            strcat(msg, msgSensorNaoExiste);
+        }
+    }
+    msg[strlen(msg)-1] = '\n';
+    int numBytes = send(socketCliente, msg, strlen(msg), 0);
+    if(numBytes != strlen(msg))
+        exibirLogSaida("send");
+}
+
 int avaliarComando(char *comando, int socketCliente) {
     char *instrucao = strtok(comando, " ");
     while(instrucao != NULL) {
@@ -129,7 +189,7 @@ int avaliarComando(char *comando, int socketCliente) {
             instalarSensor(NULL, socketCliente);
         }
         else if(strcmp(instrucao, "remove") == 0) {
-            //removerSensor();
+            removerSensor(NULL, socketCliente);
         }
         else if(strcmp(instrucao, "list") == 0) {
             consultarEquipamento(NULL, socketCliente);
