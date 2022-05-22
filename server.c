@@ -27,11 +27,11 @@ int validaId(char *strId) {
 }
 
 void instalarSensor(char *instrucao, int socketCliente) {
-    char msg[500];
+     char msg[500];
     memset(msg, 0, 500);
     int sensores[MAX_SENSORES_POR_VEZ];
     char *entrada = strtok(instrucao, " ");
-    entrada = strtok(instrucao, " ");
+    entrada = strtok(instrucao, " "); //Pula a palavra 'sensor' na instrução de entrada.
     int numSensores = 0;
     bool atingiuMaxSensores = false;
     bool entradaInvalida = false;
@@ -58,9 +58,9 @@ void instalarSensor(char *instrucao, int socketCliente) {
             char idStr[4];
             bool fezAlteracao = false;
             for(int i = 0; i < numSensores; i++){
-                if(!sistema[equipamentoId-1][sensores[i]-1]){
+                if(!sistema[equipamentoId-1][sensores[i]-1]){ //Verifica se o sensor já está instalado
                     if(qtdSensoresDisponiveis > 0){
-                        sistema[equipamentoId-1][sensores[i]-1] = true;
+                        sistema[equipamentoId-1][sensores[i]-1] = true; //Instala o sensor
                         sprintf(idStr, " 0%d", sensores[i]);
                         strcat(msg, idStr);
                         qtdSensoresDisponiveis -= 1;
@@ -74,7 +74,7 @@ void instalarSensor(char *instrucao, int socketCliente) {
                     }
                 }
                 else {
-                    sprintf(idStr, "0%d ", sensores[i]);
+                   sprintf(idStr, "0%d ", sensores[i]);
                     strcat(msgSensorDuplicado, idStr);
                 }
             }
@@ -93,7 +93,7 @@ void instalarSensor(char *instrucao, int socketCliente) {
         }
     }
     msg[strlen(msg)-1] = '\n';
-    int numBytes = send(socketCliente, msg, strlen(msg), 0);
+    int numBytes = send(socketCliente, msg, strlen(msg), 0); //Envia a mensagem
     if(numBytes != strlen(msg))
         exibirLogSaida("send");
 }
@@ -107,6 +107,10 @@ void consultarEquipamento(char *instrucao, int socketCliente) {
         texto = strtok(NULL, " ");
     }
     char *id = strtok(NULL, " ");
+    if(validaId(id) == -1) {
+        strcat(msg, "invalid equipment ");
+    }
+    else {
     int idEquipamento = atoi(id);
     char idSensor[4];
     for(int i = 0; i < 4; i++) {
@@ -118,6 +122,7 @@ void consultarEquipamento(char *instrucao, int socketCliente) {
     }
     if(!entrou)
         strcat(msg, "none ");
+    }
     msg[strlen(msg)-1] = '\n';
     int numBytes = send(socketCliente, msg, strlen(msg), 0);
     if(numBytes != strlen(msg))
@@ -201,7 +206,7 @@ void consultarVariavelDeProcesso(char *instrucao, int socketCliente) {
     while(strcmp(entrada, "in") != 0 && !entradaInvalida) {
         if(validaId(entrada) == -1) {
             entradaInvalida = true;
-            strcat(msg, "invalid sensor");
+            strcat(msg, "invalid sensor ");
         }
         else {
             sensores[numSensores] = atoi(entrada);
@@ -289,23 +294,23 @@ int main(int argc, char **argv) {
         exibirInstrucoesDeUso(argc, argv);
     }
 
-    int s;
-    s = socket(storage.ss_family, SOCK_STREAM, 0);
-    if (s == -1) {
+    int socket_;
+    socket_ = socket(storage.ss_family, SOCK_STREAM, 0);
+    if (socket_ == -1) {
         exibirLogSaida("socket");
     }
 
     int enable = 1;
-    if (0 != setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int))) {
+    if (0 != setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int))) {
         exibirLogSaida("setsockopt");
     }
 
     struct sockaddr *addr = (struct sockaddr *)(&storage);
-    if (0 != bind(s, addr, sizeof(storage))) {
+    if (0 != bind(socket_, addr, sizeof(storage))) {
         exibirLogSaida("bind");
     }
 
-    if (0 != listen(s, 10)) {
+    if (0 != listen(socket_, 10)) {
         exibirLogSaida("listen");
     }
 
@@ -318,8 +323,8 @@ int main(int argc, char **argv) {
         struct sockaddr *caddr = (struct sockaddr *)(&cstorage);
         socklen_t caddrlen = sizeof(cstorage);
 
-        int csock = accept(s, caddr, &caddrlen);
-        if (csock == -1) {
+        int socketCliente = accept(socket_, caddr, &caddrlen);
+        if (socketCliente == -1) {
             exibirLogSaida("accept");
         }
 
@@ -327,16 +332,16 @@ int main(int argc, char **argv) {
         converterEnderecoEmString(caddr, caddrstr, BUFSZ);
         printf("[log] connection from %s\n", caddrstr);
 
-        char buf[BUFSZ];
+        char buff[BUFSZ];
         int auxRetorno = 0;
         unsigned totalBytes;
         size_t numBytes;
         char *linhas;
         while(1){
-            memset(buf, 0, BUFSZ);
+            memset(buff, 0, BUFSZ);
             totalBytes = 0;
-            while(buf[strlen(buf)-1] != '\n') {
-                numBytes = recv(csock, buf + totalBytes, BUFSZ - totalBytes, 0);
+            while(buff[strlen(buff)-1] != '\n') {
+                numBytes = recv(socketCliente, buff + totalBytes, BUFSZ - totalBytes, 0);
                 if(numBytes == 0){
                     auxRetorno = -1;
                     break;
@@ -345,18 +350,18 @@ int main(int argc, char **argv) {
             }
             if(auxRetorno == -1)
                 break;
-            printf("%s", buf);
-            linhas = strtok(buf, "\n");
-            if(strcmp(buf, "kill") == 0){
-                close(csock);
+            printf("%s", buff);
+            linhas = strtok(buff, "\n");
+            if(strcmp(buff, "kill") == 0){
+                close(socketCliente);
                 exit(EXIT_SUCCESS);
                 return 0;
             }
 
             while(linhas != NULL){
-		auxRetorno = avaliarComando(buf, csock);
+		auxRetorno = avaliarComando(buff, socketCliente);
 		if(auxRetorno == -1){
-                    close(csock);
+                    close(socketCliente);
                     exit(EXIT_SUCCESS);
                     return 0;
                 }
@@ -365,7 +370,7 @@ int main(int argc, char **argv) {
 	    if(auxRetorno == -1)
                 break;
         }
-        close(csock);
+        close(socketCliente);
     }
 
     exit(EXIT_SUCCESS);
